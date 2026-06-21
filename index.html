@@ -235,17 +235,20 @@ function renderDetail(l){
 }
 
 function render(){
-  const replied = leads.filter(l => ['Replied','Engaged','Hot','In Deal'].includes(l.funnel_stage));
-  const hot = leads.filter(l => ['Hot','In Deal'].includes(l.funnel_stage));
-  const noReply = leads.filter(l => l.funnel_stage === 'No Reply' || l.funnel_stage === 'Contacted');
+  const replied = leads.filter(l => ['Replied','Form Sent','Form Filled','Deal'].includes(l.funnel_stage));
+  const hot = leads.filter(l => l.funnel_stage === 'Form Filled');
+  const formSent = leads.filter(l => l.funnel_stage === 'Form Sent');
+  const dead = leads.filter(l => ['Dead','Showcase'].includes(l.funnel_stage));
+  const sent = leads.filter(l => l.funnel_stage === 'Sent');
   const replyRate = leads.length ? Math.round(replied.length / leads.length * 100) : 0;
 
   document.getElementById('stats').innerHTML = `
-    <div class="stat"><span class="stat-val">${leads.length}</span><span class="stat-label">Total Sent</span></div>
+    <div class="stat"><span class="stat-val">${leads.length}</span><span class="stat-label">Total</span></div>
     <div class="stat"><span class="stat-val">${replied.length}</span><span class="stat-label">Replied</span></div>
     <div class="stat"><span class="stat-val" style="color:var(--green)">${replyRate}%</span><span class="stat-label">Reply Rate</span></div>
-    <div class="stat"><span class="stat-val" style="color:var(--red)">${hot.length}</span><span class="stat-label">Hot Leads</span></div>
-    <div class="stat"><span class="stat-val">${noReply.length}</span><span class="stat-label">No Reply</span></div>
+    <div class="stat"><span class="stat-val" style="color:var(--red)">${hot.length}</span><span class="stat-label">Hot (Form Filled)</span></div>
+    <div class="stat"><span class="stat-val" style="color:var(--orange)">${formSent.length}</span><span class="stat-label">Form Sent</span></div>
+    <div class="stat"><span class="stat-val">${sent.length}</span><span class="stat-label">No Reply</span></div>
   `;
 
   document.getElementById('tabs').innerHTML = STAGES.map(s => {
