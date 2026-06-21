@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Broker CRM</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0f;--surface:#12121a;--surface2:#1a1a28;--border:#2a2a3a;--text:#e0e0e8;--text2:#8888a0;--accent:#6366f1;--green:#22c55e;--yellow:#eab308;--red:#ef4444;--orange:#f97316}
+body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+
+/* Password gate */
+#gate{display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px}
+#gate h1{font-size:24px;font-weight:600;color:var(--text2)}
+#gate input{padding:12px 20px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:16px;width:280px;text-align:center;outline:none}
+#gate input:focus{border-color:var(--accent)}
+#gate .err{color:var(--red);font-size:13px;height:20px}
+
+/* App */
+#app{display:none}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+header h1{font-size:18px;font-weight:600;letter-spacing:-0.5px}
+header .tabs{display:flex;gap:4px}
+header .tabs button{padding:6px 16px;border:none;background:transparent;color:var(--text2);cursor:pointer;border-radius:6px;font-size:13px;font-weight:500}
+header .tabs button.active{background:var(--accent);color:#fff}
+header .actions{display:flex;gap:8px}
+header .actions button{padding:6px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;border-radius:6px;font-size:13px}
+header .actions button:hover{border-color:var(--accent)}
+header .actions button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* Dashboard */
+#dashboard{padding:24px;display:none}
+.metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+.metric .label{font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
+.metric .value{font-size:28px;font-weight:700}
+.metric .value.green{color:var(--green)}
+.metric .value.yellow{color:var(--yellow)}
+.metric .value.accent{color:var(--accent)}
+.funnel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px}
+.funnel h3{font-size:14px;color:var(--text2);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px}
+.funnel-bar{display:flex;align-items:center;gap:10px;padding:6px 0}
+.funnel-bar .stage-name{width:120px;font-size:13px;color:var(--text2)}
+.funnel-bar .bar{flex:1;height:24px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.funnel-bar .bar .fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:12px;font-weight:600;color:#fff;min-width:fit-content}
+.funnel-bar .count{width:30px;text-align:right;font-size:13px;font-weight:600}
+
+/* Pipeline table */
+#pipeline{padding:16px;display:none;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:1800px}
+thead{position:sticky;top:52px;z-index:50}
+th{background:var(--surface);color:var(--text2);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:0.5px;padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--text)}
+th.profile{border-bottom-color:#3b82f6}
+th.pipe{border-bottom-color:#22c55e}
+th.intel{border-bottom-color:#a855f7}
+td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:hover td{background:var(--surface)}
+tr.selected td{background:var(--surface2)}
+td.quote{font-style:italic;color:var(--text2);max-width:250px}
+td a{color:var(--accent)}
+
+/* Stage badges */
+.stage{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px}
+.stage.Sent{background:#333;color:#999}
+.stage.Replied{background:#854d0e;color:#fbbf24}
+.stage.Price-Confirmed{background:#713f12;color:#facc15}
+.stage.Broker-Agreed{background:#166534;color:#86efac}
+.stage.Form-Sent{background:#14532d;color:#4ade80}
+.stage.Form-Filled{background:#064e3b;color:#34d399}
+.stage.Pitching{background:#1e3a5f;color:#60a5fa}
+.stage.Deal{background:#14532d;color:#22c55e}
+.stage.Dead{background:#1c1c1c;color:#666}
+.stage.Showcase{background:#2e1065;color:#c084fc}
+
+/* Lead detail panel */
+#detail{position:fixed;right:-500px;top:0;width:480px;height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:200;transition:right 0.2s;overflow-y:auto;padding:20px}
+#detail.open{right:0}
+#detail .close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text2);cursor:pointer;font-size:20px}
+#detail h2{font-size:20px;margin-bottom:4px}
+#detail .founder{color:var(--text2);font-size:14px;margin-bottom:16px}
+#detail .field{margin-bottom:12px}
+#detail .field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:4px}
+#detail .field input,#detail .field select,#detail .field textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:13px;outline:none;font-family:inherit}
+#detail .field textarea{min-height:60px;resize:vertical}
+#detail .field input:focus,#detail .field select:focus,#detail .field textarea:focus{border-color:var(--accent)}
+#detail .save-btn{width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-top:16px}
+#detail .save-btn:hover{opacity:0.9}
+#detail .section-title{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+
+/* Add lead modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:440px;max-height:80vh;overflow-y:auto}
+.modal h2{margin-bottom:16px;font-size:18px}
+.modal .field{margin-bottom:10px}
+.modal .field label{display:block;font-size:12px;color:var(--text2);margin-bottom:3px}
+.modal .field input,.modal .field select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:13px;outline:none}
+.modal .btns{display:flex;gap:8px;margin-top:16px}
+.modal .btns button{flex:1;padding:10px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;border:1px solid var(--border)}
+.modal .btns .cancel{background:var(--surface2);color:var(--text)}
+.modal .btns .submit{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* Filters */
+.filters{padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.filters select{padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:12px;outline:none}
+.filters input{padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:12px;outline:none;width:200px}
+.filters .count{margin-left:auto;font-size:12px;color:var(--text2)}
+</style>
+</head>
+<body>
+
+<!-- Password Gate -->
+<div id="gate">
+  <h1>Broker CRM</h1>
+  <input type="password" id="pwd" placeholder="password" autofocus>
+  <div class="err" id="pwdErr"></div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <header>
+    <h1>Broker CRM</h1>
+    <div class="tabs">
+      <button class="active" onclick="showTab('dashboard')">Dashboard</button>
+      <button onclick="showTab('pipeline')">Pipeline</button>
+    </div>
+    <div class="actions">
+      <button onclick="loadData()">Refresh</button>
+      <button class="primary" onclick="openAddModal()">+ Add Lead</button>
+    </div>
+  </header>
+
+  <!-- Dashboard -->
+  <div id="dashboard"></div>
+
+  <!-- Pipeline -->
+  <div id="pipeline">
+    <div class="filters">
+      <select id="filterStage" onchange="renderTable()">
+        <option value="">All Stages</option>
+        <option>Sent</option><option>Replied</option><option>Price Confirmed</option>
+        <option>Broker Agreed</option><option>Form Sent</option><option>Form Filled</option>
+        <option>Pitching</option><option>Deal</option><option>Dead</option><option>Showcase</option>
+      </select>
+      <input type="text" id="filterSearch" placeholder="Search startup or founder..." oninput="renderTable()">
+      <span class="count" id="rowCount"></span>
+    </div>
+    <table>
+      <thead><tr id="tableHead"></tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Lead Detail Panel -->
+  <div id="detail">
+    <button class="close" onclick="closeDetail()">&times;</button>
+    <div id="detailContent"></div>
+  </div>
+
+  <!-- Add Lead Modal -->
+  <div class="modal-bg" id="addModal">
+    <div class="modal">
+      <h2>Add Lead</h2>
+      <div class="field"><label>Startup Name *</label><input id="addName"></div>
+      <div class="field"><label>TrustMRR Link</label><input id="addLink"></div>
+      <div class="field"><label>Founder Name</label><input id="addFounder"></div>
+      <div class="field"><label>Asking Price ($)</label><input id="addPrice" type="number"></div>
+      <div class="field"><label>MRR ($)</label><input id="addMrr" type="number"></div>
+      <div class="field"><label>Category</label><input id="addCategory"></div>
+      <div class="field"><label>Outreach Account</label><input id="addAccount" value="kiwav89854@hotkev.com"></div>
+      <div class="field">
+        <label>Funnel Stage</label>
+        <select id="addStage">
+          <option>Sent</option><option>Replied</option><option>Price Confirmed</option>
+          <option>Broker Agreed</option><option>Form Sent</option><option>Form Filled</option>
+          <option>Pitching</option><option>Deal</option><option>Dead</option><option>Showcase</option>
+        </select>
+      </div>
+      <div class="btns">
+        <button class="cancel" onclick="closeAddModal()">Cancel</button>
+        <button class="submit" onclick="addLead()">Add Lead</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPA_URL = 'https://jehtyfibjzjldogrrhoh.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplaHR5ZmlianpqbGRvZ3JyaG9oIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjAzNTk1MCwiZXhwIjoyMDk3NjExOTUwfQ.N_7je3wIMPBMA1Pf6tj8CD3L8VCLYe6FHnK1gbeUdY8';
+const PASSWORD = 'broker2026';
+
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+let leads = [];
+let currentSort = { col: 'date_contacted', asc: false };
+let selectedId = null;
+
+// Auth
+document.getElementById('pwd').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if (e.target.value === PASSWORD) {
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      loadData();
+    } else {
+      document.getElementById('pwdErr').textContent = 'wrong password';
+    }
+  }
+});
+
+// Data
+async function loadData() {
+  const { data, error } = await sb.from('outreach_leads').select('*').order('date_contacted', { ascending: false });
+  if (error) { console.error(error); return; }
+  leads = data || [];
+  renderDashboard();
+  renderTable();
+}
+
+// Tabs
+function showTab(tab) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('dashboard').style.display = tab === 'dashboard' ? 'block' : 'none';
+  document.getElementById('pipeline').style.display = tab === 'pipeline' ? 'block' : 'none';
+}
+
+// Dashboard
+function renderDashboard() {
+  const stages = ['Sent','Replied','Price Confirmed','Broker Agreed','Form Sent','Form Filled','Pitching','Deal','Dead','Showcase'];
+  const counts = {};
+  stages.forEach(s => counts[s] = leads.filter(l => l.funnel_stage === s).length);
+  const total = leads.length;
+  const replied = total - (counts['Sent'] || 0);
+  const replyRate = total ? ((replied / total) * 100).toFixed(1) : 0;
+  const formsF = leads.filter(l => l.form_filled).length;
+  const exitbid = leads.filter(l => l.listed_on_exitbid).length;
+  const avgReply = leads.filter(l => l.reply_time_hrs).reduce((a, l) => a + Number(l.reply_time_hrs), 0) / (leads.filter(l => l.reply_time_hrs).length || 1);
+  const maxCount = Math.max(...Object.values(counts), 1);
+  const stageColors = {Sent:'#555',Replied:'#eab308','Price Confirmed':'#f59e0b','Broker Agreed':'#22c55e','Form Sent':'#16a34a','Form Filled':'#059669',Pitching:'#3b82f6',Deal:'#10b981',Dead:'#444',Showcase:'#8b5cf6'};
+
+  document.getElementById('dashboard').innerHTML = `
+    <div class="metrics">
+      <div class="metric"><div class="label">Total Leads</div><div class="value accent">${total}</div></div>
+      <div class="metric"><div class="label">Reply Rate</div><div class="value yellow">${replyRate}%</div></div>
+      <div class="metric"><div class="label">Forms Filled</div><div class="value green">${formsF}</div></div>
+      <div class="metric"><div class="label">On ExitBid</div><div class="value green">${exitbid}</div></div>
+      <div class="metric"><div class="label">Active Deals</div><div class="value green">${counts['Deal'] || 0}</div></div>
+      <div class="metric"><div class="label">Dead Leads</div><div class="value">${counts['Dead'] || 0}</div></div>
+      <div class="metric"><div class="label">Avg Reply (hrs)</div><div class="value">${avgReply.toFixed(1)}</div></div>
+      <div class="metric"><div class="label">Pitching</div><div class="value accent">${counts['Pitching'] || 0}</div></div>
+    </div>
+    <div class="funnel">
+      <h3>Funnel Breakdown</h3>
+      ${stages.map(s => `
+        <div class="funnel-bar">
+          <span class="stage-name">${s}</span>
+          <div class="bar"><div class="fill" style="width:${Math.max((counts[s]/maxCount)*100, counts[s]?8:0)}%;background:${stageColors[s]}">${counts[s] || ''}</div></div>
+          <span class="count">${counts[s]}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// Pipeline table
+const COLUMNS = [
+  { key:'startup_name', label:'Startup', cls:'profile', w:160 },
+  { key:'founder_name', label:'Founder', cls:'profile', w:120 },
+  { key:'asking_price', label:'Ask $', cls:'profile', w:80, fmt:v=>v?'$'+Number(v).toLocaleString():'' },
+  { key:'mrr', label:'MRR', cls:'profile', w:70, fmt:v=>v?'$'+Number(v).toLocaleString():'' },
+  { key:'category', label:'Category', cls:'profile', w:90 },
+  { key:'revenue_trend', label:'Trend', cls:'profile', w:70 },
+  { key:'funnel_stage', label:'Stage', cls:'pipe', w:120, fmt:v=>v?`<span class="stage ${v.replace(/\s/g,'-')}">${v}</span>`:'' },
+  { key:'date_contacted', label:'Contacted', cls:'pipe', w:90, fmt:v=>v?new Date(v).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):'' },
+  { key:'reply_time_hrs', label:'Reply h', cls:'pipe', w:60 },
+  { key:'first_reply_sentiment', label:'Sentiment', cls:'pipe', w:80 },
+  { key:'key_quote', label:'Key Quote', cls:'pipe', w:200, tdCls:'quote' },
+  { key:'objections', label:'Objection', cls:'pipe', w:90 },
+  { key:'form_filled', label:'Form', cls:'pipe', w:50, fmt:v=>v?'Yes':'' },
+  { key:'listed_on_exitbid', label:'ExitBid', cls:'pipe', w:60, fmt:v=>v?'Yes':'' },
+  { key:'next_action', label:'Next Action', cls:'intel', w:140 },
+  { key:'auto_followup_date', label:'Follow-up', cls:'intel', w:90, fmt:v=>v?new Date(v).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):'' },
+  { key:'current_price', label:'Cur $', cls:'intel', w:80, fmt:v=>v?'$'+Number(v).toLocaleString():'' },
+  { key:'price_drops', label:'Drops', cls:'intel', w:50 },
+  { key:'has_other_broker', label:'Broker?', cls:'intel', w:70 },
+];
+
+function renderTable() {
+  const stage = document.getElementById('filterStage').value;
+  const search = document.getElementById('filterSearch').value.toLowerCase();
+  let filtered = leads;
+  if (stage) filtered = filtered.filter(l => l.funnel_stage === stage);
+  if (search) filtered = filtered.filter(l =>
+    (l.startup_name||'').toLowerCase().includes(search) ||
+    (l.founder_name||'').toLowerCase().includes(search)
+  );
+  filtered.sort((a, b) => {
+    let va = a[currentSort.col] ?? '', vb = b[currentSort.col] ?? '';
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    return currentSort.asc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+  });
+
+  document.getElementById('tableHead').innerHTML = COLUMNS.map(c =>
+    `<th class="${c.cls}" style="width:${c.w}px" onclick="sortBy('${c.key}')">${c.label}</th>`
+  ).join('');
+
+  document.getElementById('tableBody').innerHTML = filtered.map(l =>
+    `<tr class="${l.id===selectedId?'selected':''}" onclick="openDetail('${l.id}')">
+      ${COLUMNS.map(c => {
+        const raw = l[c.key];
+        const val = c.fmt ? c.fmt(raw) : (raw ?? '');
+        return `<td class="${c.tdCls||''}" title="${String(raw||'').replace(/"/g,'')}">${val}</td>`;
+      }).join('')}
+    </tr>`
+  ).join('');
+
+  document.getElementById('rowCount').textContent = `${filtered.length} of ${leads.length} leads`;
+}
+
+function sortBy(col) {
+  if (currentSort.col === col) currentSort.asc = !currentSort.asc;
+  else { currentSort.col = col; currentSort.asc = true; }
+  renderTable();
+}
+
+// Detail panel
+function openDetail(id) {
+  selectedId = id;
+  const l = leads.find(x => x.id === id);
+  if (!l) return;
+  renderTable();
+  const f = (key, label, type='text', opts=null) => {
+    if (type === 'select') {
+      return `<div class="field"><label>${label}</label><select data-key="${key}">${opts.map(o => `<option ${l[key]===o?'selected':''}>${o}</option>`).join('')}</select></div>`;
+    }
+    if (type === 'textarea') return `<div class="field"><label>${label}</label><textarea data-key="${key}">${l[key]||''}</textarea></div>`;
+    if (type === 'checkbox') return `<div class="field"><label><input type="checkbox" data-key="${key}" ${l[key]?'checked':''}> ${label}</label></div>`;
+    return `<div class="field"><label>${label}</label><input type="${type}" data-key="${key}" value="${l[key]||''}"></div>`;
+  };
+  const stages = ['Sent','Replied','Price Confirmed','Broker Agreed','Form Sent','Form Filled','Pitching','Deal','Dead','Showcase'];
+  const sents = ['','Positive','Neutral','Negative','Question'];
+  const objs = ['','None','Price','Trust','Timing','Has broker','Not selling','No reply','Other'];
+  const trends = ['','Growing','Stable','Declining','New'];
+  const brokers = ['Unknown','Yes','No'];
+  const lostR = ['','Not selling','Price too high','Chose other broker','No response','Showcase only','Changed mind','Already sold','Other'];
+
+  document.getElementById('detailContent').innerHTML = `
+    <h2>${l.startup_name}</h2>
+    <div class="founder">${l.founder_name || 'Unknown founder'}</div>
+    <div class="section-title">Lead Profile</div>
+    ${f('startup_name','Startup Name')}
+    ${f('trustmrr_link','TrustMRR Link','url')}
+    ${f('founder_name','Founder Name')}
+    ${f('asking_price','Asking Price ($)','number')}
+    ${f('mrr','MRR ($)','number')}
+    ${f('category','Category')}
+    ${f('multiple','Multiple','number')}
+    ${f('days_on_market','Days on Market','number')}
+    ${f('revenue_trend','Revenue Trend','select',trends)}
+    <div class="section-title">Pipeline</div>
+    ${f('outreach_account','Outreach Account')}
+    ${f('date_contacted','Date Contacted','date')}
+    ${f('funnel_stage','Funnel Stage','select',stages)}
+    ${f('reply_time_hrs','Reply Time (hrs)','number')}
+    ${f('first_reply_sentiment','Sentiment','select',sents)}
+    ${f('key_quote','Key Quote','textarea')}
+    ${f('messages_to_broker','Messages to Broker','number')}
+    ${f('objections','Objections','select',objs)}
+    ${f('template_used','Template Used')}
+    ${f('form_sent','Form Sent','checkbox')}
+    ${f('form_filled','Form Filled','checkbox')}
+    ${f('listed_on_exitbid','Listed on ExitBid','checkbox')}
+    ${f('listed_on_fl1p','Listed on fl1p','checkbox')}
+    ${f('last_message','Last Message','textarea')}
+    ${f('next_action','Next Action')}
+    ${f('auto_followup_date','Auto Follow-up Date','date')}
+    <div class="section-title">Deal Intelligence</div>
+    ${f('original_price','Original Price ($)','number')}
+    ${f('current_price','Current Price ($)','number')}
+    ${f('price_drops','Price Drops','number')}
+    ${f('has_other_broker','Has Other Broker','select',brokers)}
+    ${f('competing_offers','Competing Offers')}
+    ${f('recontact_date','Recontact Date','date')}
+    ${f('recontact_reason','Recontact Reason')}
+    ${f('lost_reason','Lost Reason','select',lostR)}
+    ${f('notes','Notes','textarea')}
+    <button class="save-btn" onclick="saveDetail()">Save Changes</button>
+  `;
+  document.getElementById('detail').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detail').classList.remove('open');
+  selectedId = null;
+  renderTable();
+}
+
+async function saveDetail() {
+  const updates = {};
+  document.querySelectorAll('#detailContent [data-key]').forEach(el => {
+    const key = el.dataset.key;
+    let val;
+    if (el.type === 'checkbox') val = el.checked;
+    else if (el.type === 'number') val = el.value ? Number(el.value) : null;
+    else val = el.value || null;
+    updates[key] = val;
+  });
+  updates.updated_at = new Date().toISOString();
+  const { error } = await sb.from('outreach_leads').update(updates).eq('id', selectedId);
+  if (error) { alert('Save failed: ' + error.message); return; }
+  await loadData();
+  openDetail(selectedId);
+}
+
+// Add lead
+function openAddModal() { document.getElementById('addModal').classList.add('open'); }
+function closeAddModal() { document.getElementById('addModal').classList.remove('open'); }
+
+async function addLead() {
+  const name = document.getElementById('addName').value.trim();
+  if (!name) { alert('Startup name required'); return; }
+  const lead = {
+    startup_name: name,
+    trustmrr_link: document.getElementById('addLink').value || null,
+    founder_name: document.getElementById('addFounder').value || null,
+    asking_price: document.getElementById('addPrice').value ? Number(document.getElementById('addPrice').value) : null,
+    mrr: document.getElementById('addMrr').value ? Number(document.getElementById('addMrr').value) : null,
+    category: document.getElementById('addCategory').value || null,
+    outreach_account: document.getElementById('addAccount').value || null,
+    funnel_stage: document.getElementById('addStage').value,
+    date_contacted: new Date().toISOString()
+  };
+  const { error } = await sb.from('outreach_leads').insert(lead);
+  if (error) { alert('Error: ' + error.message); return; }
+  closeAddModal();
+  document.getElementById('addName').value = '';
+  document.getElementById('addLink').value = '';
+  document.getElementById('addFounder').value = '';
+  document.getElementById('addPrice').value = '';
+  document.getElementById('addMrr').value = '';
+  document.getElementById('addCategory').value = '';
+  await loadData();
+}
+</script>
+</body>
+</html>
