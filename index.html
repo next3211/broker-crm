@@ -211,6 +211,25 @@ function renderDetail(l){
 
   let rightHtml = '';
   if(l.key_quote) rightHtml += `<div class="detail-full"><h3>Key Quote</h3><p>"${esc(l.key_quote)}"</p></div>`;
+
+  if(l.sell_reason) {
+    const formKv = [
+      ['Why Selling', l.sell_reason],
+      ['Close Urgency', l.close_urgency],
+      ['Price Confidence', l.price_confidence],
+      ['Deal Priority', l.deal_priority],
+      ['Weekly Hours', l.weekly_hours],
+      ['Included', l.included_assets],
+      ['Transfer Risk', l.transfer_risk],
+      ['Listed On', l.listed_on],
+      ['Offers Received', l.offer_status],
+      ['Email', l.seller_email],
+    ].filter(([,v]) => v);
+    const formHtml = formKv.map(([k,v]) => `<div class="kv"><span class="kv-key">${k}</span><span class="kv-val">${esc(v)}</span></div>`).join('');
+    rightHtml += `<div class="detail-section"><h3>Intake Form</h3>${formHtml}</div>`;
+    if(l.seller_notes) rightHtml += `<div class="detail-full"><h3>Seller Notes</h3><p>${esc(l.seller_notes)}</p></div>`;
+  }
+
   if(l.last_message) rightHtml += `<div class="detail-full"><h3>Last Message</h3><p>${esc(l.last_message)}</p></div>`;
   if(l.objections) rightHtml += `<div class="detail-full"><h3>Objections</h3><p>${esc(l.objections)}</p></div>`;
   if(l.competing_offers) rightHtml += `<div class="detail-full"><h3>Competing Offers</h3><p>${esc(l.competing_offers)}</p></div>`;
