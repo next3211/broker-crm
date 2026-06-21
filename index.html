@@ -164,6 +164,8 @@ function esc(s){ if(!s) return ''; const d=document.createElement('div');d.textC
 function stageClass(s){ return 'stage-'+(s||'sent').toLowerCase().replace(/\s+/g,'_'); }
 function shortAccount(a){ return a ? a.split('@')[0].slice(0,6)+'...' : '—'; }
 function boolIcon(v){ return v ? '<span class="bool-yes">Yes</span>' : '<span class="bool-no">No</span>'; }
+const STEPS=['Opener sent','Price discussed','Broker pitched','Confirmed','Form sent'];
+function stepLabel(n){ return STEPS[n] || 'Step '+n; }
 function deadline(d){ if(!d) return null; const ms=new Date(d).getTime()+5*86400000-Date.now(); const days=Math.ceil(ms/86400000); return days; }
 function deadlineBadge(l){ if(!l.form_filled_at) return ''; const d=deadline(l.form_filled_at); if(d===null) return ''; if(d<0) return '<span class="badge" style="background:#ef444444;color:var(--red)">OVERDUE '+Math.abs(d)+'d</span>'; if(d===0) return '<span class="badge" style="background:#ef444444;color:var(--red)">TODAY</span>'; if(d<=2) return '<span class="badge" style="background:#f9731644;color:var(--orange)">'+d+'d left</span>'; return '<span class="badge" style="background:#22c55e22;color:var(--green)">'+d+'d left</span>'; }
 
@@ -204,12 +206,13 @@ function renderDetail(l){
   const kvHtml = kvPairs.map(([k,v]) => `<div class="kv"><span class="kv-key">${k}</span><span class="kv-val">${v}</span></div>`).join('');
 
   const boolPairs = [
+    ['Outreach Step', null, `<span style="color:var(--cyan);font-weight:600">${l.outreach_step||0}/4 — ${stepLabel(l.outreach_step||0)}</span>`],
     ['Form Sent', l.form_sent],
     ['Form Filled', l.form_filled],
     ['Listed on ExitBid', l.listed_on_exitbid],
     ['Listed on fl1p', l.listed_on_fl1p],
   ];
-  const boolHtml = boolPairs.map(([k,v]) => `<div class="kv"><span class="kv-key">${k}</span><span class="kv-val">${boolIcon(v)}</span></div>`).join('');
+  const boolHtml = boolPairs.map(([k,v,custom]) => `<div class="kv"><span class="kv-key">${k}</span><span class="kv-val">${custom || boolIcon(v)}</span></div>`).join('');
   let deadlineHtml = '';
   if(l.form_filled_at) {
     const d = deadline(l.form_filled_at);
